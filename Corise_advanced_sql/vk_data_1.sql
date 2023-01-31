@@ -1,3 +1,4 @@
+--First CTE to get the latitude & Longitude of all the supplier cities.
 WITH suppliers_data AS (
     SELECT
         vk_data.suppliers.supplier_info.supplier_id,
@@ -16,7 +17,7 @@ WITH suppliers_data AS (
             vk_data.suppliers.supplier_info.supplier_state
         ) = vk_data.resources.us_cities.state_abbr
 ),
-
+--deduplicating the city, state combination by picking the 1st instance based on County name. 
 cities AS (
 
     SELECT
@@ -33,7 +34,7 @@ cities AS (
             ORDER BY vk_data.resources.us_cities.county_name
         ) = 1
 ),
-
+--Gathering customer details making sure they are eligible to add, also the latitude & longitude for their city
 customers_data AS (
     SELECT
         vk_data.customers.customer_data.customer_id,
@@ -62,6 +63,7 @@ customers_data AS (
 
 
 )
+--cross join cities data with customer data, calculate distances and pick the nearest one using a window function.
 ,
 distances AS (
     SELECT
@@ -92,7 +94,7 @@ distances AS (
         ) = 1
 )
 
-
+--final presentation with required ordering.
 SELECT
     customer_id AS "Customer ID",
     first_name AS "Customer first name",

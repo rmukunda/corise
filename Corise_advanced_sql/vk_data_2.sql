@@ -1,3 +1,4 @@
+--get details for customers eligible for ordering. Also get the top 3 tags by tag name for each of them using ROW_NUMBER window function
 WITH cust_tags AS (
     SELECT
         vk_data.customers.customer_data.customer_id,
@@ -5,9 +6,7 @@ WITH cust_tags AS (
         vk_data.customers.customer_data.last_name,
         vk_data.customers.customer_data.email,
         trim(vk_data.resources.recipe_tags.tag_property) AS customer_tag,
-        count(
-            *
-        ) OVER (
+        ROW_NUMBER () OVER (
             PARTITION BY
                 vk_data.customers.customer_data.customer_id
             ORDER BY trim(vk_data.resources.recipe_tags.tag_property)
@@ -33,13 +32,13 @@ WITH cust_tags AS (
         )
     QUALIFY tag_rank <= 3
 ),
-
+--Flatten the tags for all the recipes.
 recipe_tags AS (SELECT
     recipe_name,
     trim(replace(t.value, '"', '')) AS tag_word
-    FROM vk_data.chefs.recipe, table(flatten(r.tag_list)) AS t
+    FROM vk_data.chefs.recipe, table(flatten(vk_data.chefs.recipe.tag_list)) AS t
 ),
-
+--Pivot the customer tag data to get the first 3 preferences as columns.
 customer_prefs AS (SELECT * FROM
     cust_tags
     PIVOT(
@@ -54,7 +53,7 @@ customer_prefs AS (SELECT * FROM
         food_pref_3
     )
 ),
-
+--Get a random recipe for the first food preference
 customer_recipe AS (
     SELECT
         customer_id,
@@ -67,7 +66,7 @@ customer_recipe AS (
     GROUP BY 1
 )
 
-
+--Present the final data with customer preferences & recipe chosen.
 SELECT
     customer_prefs.customer_id,
     first_name,
