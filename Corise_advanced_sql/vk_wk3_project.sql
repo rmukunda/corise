@@ -1,3 +1,9 @@
+/*
+Filtering out to reatin just view_recipe & search events early reduced the data carried to later steps & helped with the performance
+For higher volume data, one option could be to pre-extract the event_details json to get the event & recipe_id data into new columns.
+Another option could be to store view_counts & number of searches per recipe view stored at the end of each day. This can then be aggregated when presenting.
+*/
+
 with search_data as (
     select
         session_id,
@@ -19,7 +25,8 @@ with search_data as (
         ) in ('search', 'view_recipe')
 )
 ,
-search_per_recipe as (select
+search_per_recipe as (
+    select
     *,
     COUNT(
         *
@@ -34,7 +41,6 @@ search_per_recipe as (select
         partition by event_date order by view_count desc
     ) as views_rank
     from search_data
---WHERE visit_type IN ('search', 'view_recipe')
 )
 ,
 session_raw as (
@@ -50,23 +56,29 @@ session_raw as (
         ) as session_duration
     from vk_data.events.website_activity
     group by session_id
-)
+),
 
-select
+pre_final as (select
     session_raw.event_date,
     COUNT(distinct session_raw.session_id) as total_sessions,
     ROUND(AVG(session_duration)) as average_session_duration,
     AVG(searches) as avg_searches,
     MIN(
         case when views_rank = 1 then search_per_recipe.recipe_id end
-    ) as recipe,
-    MIN(vk_data.chefs.recipe.recipe_name) as recipe_name
-from session_raw
-inner join
-    search_per_recipe on session_raw.event_date = search_per_recipe.event_date
+    ) as recipe
+
+    from session_raw
+    inner join
+        search_per_recipe on
+            session_raw.event_date = search_per_recipe.event_date
+    where visit_type = 'view_recipe'
+    group by session_raw.event_date
+)
+
+select
+    pre_final.*,
+    vk_data.chefs.recipe.recipe_name
+from pre_final
 inner join
     vk_data.chefs.recipe on
-        search_per_recipe.recipe_id = vk_data.chefs.recipe.recipe_id
-where visit_type = 'view_recipe'
-group by session_raw.event_date
-ORDER BY session_raw.event_date
+        pre_final.recipe = vk_data.chefs.recipe.recipe_id
